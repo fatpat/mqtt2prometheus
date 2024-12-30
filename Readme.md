@@ -288,6 +288,17 @@ metrics:
    type: counter
   # This setting requires an almost monotonic counter as the source. When monotonicy is enforced, the metric value is regularly written to disk. Thus, resets in the source counter can be detected and corrected by adding an offset as if the reset did not happen. The result is a true monotonic increasing time series, like an ever growing counter.
    force_monotonicy: true
+ - prom_name: linky_time
+  # The name of the metric in a MQTT JSON message
+   mqtt_name: linky_current_date
+  # Regular expression to only match sensors with the given name pattern
+   sensor_name_filter: "^linky.*$"
+  # The prometheus help text for this metric
+   help: current unix timestamp from linky
+  # The prometheus type for this metric. Valid values are: "gauge" and "counter"
+   type: gauge
+  # convert dynamic datetime string to unix timestamp
+   raw_expression: 'date(string(raw_value), "H060102150405", "Europe/Paris").Unix()'
 ```
 
 ### Environment Variables
@@ -335,13 +346,18 @@ Create a docker secret to store the password(`mqtt-credential` in the example be
 
 ### Expressions
 
-Metric values can be derived from sensor inputs using complex expressions. Set the metric config option `expression` to the desired formular to calculate the result from the input. Here's an example which integrates all positive values over time:
-
+Metric values can be derived from sensor inputs using complex expressions. Set the metric config option `raw_expression` or `expression` to the desired formular to calculate the result from the input. `raw_expression` and `expression` are mutually exclusives:
+* `raw_expression` is run without raw value conversion. It's `raw_expression` duty to handle the conversion. Only `raw_value` is set while `value` is always set to 0.0. Here is an example which convert datetime (format `HYYMMDDhhmmss`) to unix timestamp:
+```yaml
+raw_expression: 'date(string(raw_value), "H060102150405", "Europe/Paris").Unix()'
+```
+* `expression` is run after raw value conversion. If conversion fails, `expression` is not run. Here's an example which integrates all positive values over time:
 ```yaml
 expression: "value > 0 ? last_result + value * elapsed.Seconds() : last_result"
 ```
 
 During the evaluation, the following variables are available to the expression:
+* `raw_value` - the raw MQTT sensor value (without any conversion)
 * `value` - the current sensor value (after string-value mapping, if configured)
 * `last_value` - the `value` during the previous expression evaluation
 * `last_result` - the result from the previous expression evaluation
